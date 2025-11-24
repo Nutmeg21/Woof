@@ -1,7 +1,7 @@
 # Woof
 ---
 ## Team
-1. Loo Jiun Wei
-2. Lee Jarrell
-3. Angel Tan Ke Qin
-4. Janisa Goh Shi Jie
+1. LOO JIUN WEI
+2. LEE JARRELL
+3. ANGEL TAN KE QIN
+4. JANISA GOH SHI JIE
