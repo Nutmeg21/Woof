@@ -6,7 +6,8 @@ import * as FileSystem from 'expo-file-system';
 // REPLACE THIS WITH YOUR LAPTOP'S LOCAL IP ADDRESS
 // On Windows: run `ipconfig` -> IPv4 Address
 // On Mac: run `ifconfig` -> en0 inet
-const SERVER_URL = 'ws://192.168.1.X:8000/ws/audio'; 
+//paste your ip adress here and remain the port as 8000
+const SERVER_URL = 'ws://10.207.110.216:8000/ws/audio'; 
 
 export default function App() {
   const [recording, setRecording] = useState(null);
