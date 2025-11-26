@@ -1,0 +1,65 @@
+{
+  "expo": {
+    "name": "scam-guard-app",
+    "slug": "scam-guard-app",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/woof_logo.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/woof_logo.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.hackathon.scamguard",
+      "infoPlist": {
+        "UIBackgroundModes": [
+          "audio",
+          "fetch"
+        ]
+      }
+    },
+    "android": {
+      "package": "com.hackathon.scamguard",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/woof_logo.png",
+        "backgroundColor": "#ffffff"
+      },
+      "permissions": [
+        "android.permission.AUDIO_CAPTURE",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.WAKE_LOCK",
+        "android.permission.SYSTEM_ALERT_WINDOW",
+        "android.permission.MODIFY_AUDIO_SETTINGS"
+      ],
+      "googleServicesFile": "./google-services.json"
+    },
+    "plugins": [
+      [
+        "expo-av",
+        {
+          "microphonePermission": "Allow ScamGuard to detect scam calls."
+        }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "extraMavenRepos": [
+              "../../node_modules/@notifee/react-native/android/libs"
+            ]
+          }
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "a13c1257-3152-4580-bb16-b24c06a76cca"
+      }
+    }
+  }
+}
+

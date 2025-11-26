@@ -1,36 +1,32 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { StyleSheet, Text, View, TouchableOpacity, Alert, Animated } from 'react-native';
+import { StyleSheet, Text, View, TouchableOpacity, Alert, Animated, Vibration, Platform } from 'react-native';
 import { Audio } from 'expo-av';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
+import * as Location from 'expo-location';
+import * as Speech from 'expo-speech';
+import notifee, { AndroidImportance, AndroidVisibility, AndroidCategory } from '@notifee/react-native';
 
-// REPLACE THIS WITH YOUR LAPTOP'S LOCAL IP ADDRESS
-// On Windows: run `ipconfig` -> IPv4 Address
-// On Mac: run `ifconfig` -> en0 inet
-//paste your ip adress here and remain the port as 8000
-const SERVER_URL = 'ws://10.207.110.216:8000/ws/audio'; 
+const SERVER_URL = 'ws://10.207.110.192:8000/ws/audio'; 
 
 export default function App() {
-  const [recording, setRecording] = useState(null);
   const [isMonitoring, setIsMonitoring] = useState(false);
   const [scamStatus, setScamStatus] = useState({ status: 'IDLE', message: 'Ready to protect', color: '#333' });
+  
   const socketRef = useRef(null);
   const pulseAnim = useRef(new Animated.Value(1)).current;
+  const isMonitoringRef = useRef(false);
+  const recordingRef = useRef(null);
+  const hasAlertedRef = useRef(false);
 
   useEffect(() => {
-    // Request permissions on app load
     (async () => {
+      // Request all permissions
       await Audio.requestPermissionsAsync();
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS: true,
-        playsInSilentModeIOS: true,
-        staysActiveInBackground: true, // Limited support in Expo Go
-        shouldDuckAndroid: true,
-        playThroughEarpieceAndroid: false,
-      });
+      await Location.requestForegroundPermissionsAsync();
+      await notifee.requestPermission();
     })();
   }, []);
 
-  // Pulse animation for the UI
   const startPulse = () => {
     Animated.loop(
       Animated.sequence([
@@ -40,172 +36,177 @@ export default function App() {
     ).start();
   };
 
-  const startMonitoring = async () => {
-    try {
-      // 1. Connect to Backend
-      socketRef.current = new WebSocket(SERVER_URL);
-      
-      socketRef.current.onopen = () => {
-        console.log('Connected to Server');
-        setIsMonitoring(true);
-        startPulse();
-        startRecording();
-      };
+  const triggerScamAlert = async () => {
+    if (hasAlertedRef.current) return;
+    hasAlertedRef.current = true;
 
-      socketRef.current.onmessage = (event) => {
-        const data = JSON.parse(event.data);
-        setScamStatus(data);
-        if (data.status === 'SCAM') {
-            // Optional: Haptic feedback or Alarm could go here
-        }
-      };
+    // 1. Create Channel
+    const channelId = await notifee.createChannel({
+      id: 'scam_alert',
+      name: 'Scam Alerts',
+      importance: AndroidImportance.HIGH,
+      visibility: AndroidVisibility.PUBLIC,
+      sound: 'default',
+      vibration: true,
+    });
 
-      socketRef.current.onerror = (e) => {
-        console.log('Error:', e.message);
-        Alert.alert("Connection Error", "Is the backend running?");
-      };
+    // 2. Full Screen Overlay Alert
+    await notifee.displayNotification({
+      title: '🚨 SCAM DETECTED',
+      body: 'HANG UP NOW!',
+      android: {
+        channelId,
+        category: AndroidCategory.CALL,
+        importance: AndroidImportance.HIGH,
+        fullScreenAction: {
+          id: 'default',
+        },
+        // Make the notification RED
+        color: '#FF0000',
+        actions: [
+          {
+            title: 'STOP ALARM',
+            pressAction: { id: 'stop' },
+          },
+        ],
+        vibrationPattern: [0, 500, 200, 500],
+        ongoing: true, 
+        loopSound: true,
+      },
+    });
 
-    } catch (err) {
-      console.error('Failed to start monitoring', err);
+    // 3. Audio & Haptics
+    Vibration.vibrate([0, 500, 200, 500]);
+    Speech.speak("Warning. Scam detected. Hang up immediately.");
+  };
+
+  // --- RECORDING LOGIC (Standard Chunking) ---
+  const cleanupRecording = async () => {
+    if (recordingRef.current) {
+        try {
+            const status = await recordingRef.current.getStatusAsync();
+            if (status.isLoaded) await recordingRef.current.stopAndUnloadAsync();
+            else await recordingRef.current.unloadAsync();
+        } catch (e) {}
+        recordingRef.current = null;
     }
   };
 
-  const startRecording = async () => {
+  const startMonitoring = async () => {
     try {
-      const { recording } = await Audio.Recording.createAsync(
-        Audio.RecordingOptionsPresets.HIGH_QUALITY,
-        (status) => {
-            // In a production app, we would stream chunks here.
-            // However, Expo AV writes to file first.
-            // For a Hackathon "Real-time" effect, we send small file chunks repeatedly
-            // or use a specific streaming library (complex).
-            // APPROACH: We will use a timer to read the file every 2 seconds and send it.
-        },
-        1000 // Update every second
+      await stopMonitoring();
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: true,
+        playsInSilentModeIOS: true,
+        staysActiveInBackground: true,
+        shouldDuckAndroid: true,
+        playThroughEarpieceAndroid: false,
+      });
+
+      // Background Keep-Alive
+      await Location.watchPositionAsync(
+        { accuracy: Location.Accuracy.Lowest, timeInterval: 5000, distanceInterval: 100 },
+        () => {} 
       );
-      setRecording(recording);
-      
-      // HACKATHON STREAMING WORKAROUND
-      // Expo doesn't support direct binary streaming easily. 
-      // We will simulate the stream by sending a "keep-alive" or reading the file buffer periodically.
-      // For this simplified code, we will assume the backend accepts the connection 
-      // and we just simulate the "Active Listening" state visually while the AI (on backend)
-      // would process the audio file if we could upload it continuously.
-      
-      // To actually stream audio bytes in Expo requires ejecting or native modules.
-      // For the demo, we will send dummy data to trigger the backend logic 
-      // so you can demonstrate the UI flow.
-      
-      const interval = setInterval(() => {
-        if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
-            // Sending a dummy byte to trigger the backend "predict" function
-            // In a real native app, this would be: socket.send(recordingBuffer);
-            socketRef.current.send(new Uint8Array([0,1,0,1])); 
-        }
-      }, 2000); // Check every 2 seconds
 
-      recording.intervalId = interval;
+      setIsMonitoring(true);
+      isMonitoringRef.current = true;
+      hasAlertedRef.current = false;
+      startPulse();
 
+      socketRef.current = new WebSocket(SERVER_URL);
+      
+      socketRef.current.onopen = () => {
+        console.log('Connected');
+        startRecordingLoop();
+      };
+
+      socketRef.current.onmessage = (event) => {
+        try {
+            const data = JSON.parse(event.data);
+            setScamStatus(data);
+            if (data.status === 'SCAM') triggerScamAlert();
+        } catch (e) {}
+      };
+
+      socketRef.current.onerror = () => stopMonitoring();
+      
     } catch (err) {
-      console.error('Failed to start recording', err);
+      console.error(err);
+    }
+  };
+
+  const startRecordingLoop = async () => {
+    if (!isMonitoringRef.current) return;
+    try {
+      await cleanupRecording();
+      const recording = new Audio.Recording();
+      await recording.prepareToRecordAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
+      await recording.startAsync();
+      recordingRef.current = recording;
+
+      await new Promise(resolve => setTimeout(resolve, 2000));
+
+      if (recordingRef.current && isMonitoringRef.current) {
+          await recordingRef.current.stopAndUnloadAsync();
+          const uri = recordingRef.current.getURI();
+          recordingRef.current = null;
+
+          if (uri && socketRef.current?.readyState === WebSocket.OPEN) {
+              const base64Data = await FileSystem.readAsStringAsync(uri, { encoding: 'base64' });
+              socketRef.current.send(JSON.stringify({ type: "audio_chunk", data: base64Data }));
+              await FileSystem.deleteAsync(uri, { idempotent: true });
+          }
+      }
+      if (isMonitoringRef.current) startRecordingLoop();
+    } catch (err) {
+      await cleanupRecording();
+      if (isMonitoringRef.current) setTimeout(startRecordingLoop, 1500);
     }
   };
 
   const stopMonitoring = async () => {
     setIsMonitoring(false);
+    isMonitoringRef.current = false;
+    hasAlertedRef.current = false;
     pulseAnim.setValue(1);
-    
-    if (recording) {
-      clearInterval(recording.intervalId);
-      await recording.stopAndUnloadAsync();
-      setRecording(null);
-    }
-    
+    await cleanupRecording();
+    Speech.stop();
+    await notifee.cancelAllNotifications(); // Stop the alarm
     if (socketRef.current) {
-      socketRef.current.close();
+        socketRef.current.close();
+        socketRef.current = null;
     }
     setScamStatus({ status: 'IDLE', message: 'Ready to protect', color: '#333' });
   };
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>ScamGuard</Text>
-      
+      <Text style={styles.title}>ScamGuard (Dev)</Text>
       <View style={[styles.indicatorContainer, { backgroundColor: scamStatus.color }]}>
         <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
             <Text style={styles.statusText}>{scamStatus.status}</Text>
         </Animated.View>
         <Text style={styles.subText}>{scamStatus.message}</Text>
       </View>
-
       <TouchableOpacity
         style={[styles.button, { backgroundColor: isMonitoring ? '#ff4444' : '#007AFF' }]}
         onPress={isMonitoring ? stopMonitoring : startMonitoring}
       >
-        <Text style={styles.buttonText}>
-          {isMonitoring ? 'Stop Monitoring' : 'Start Protection'}
-        </Text>
+        <Text style={styles.buttonText}>{isMonitoring ? 'Stop Monitoring' : 'Start Protection'}</Text>
       </TouchableOpacity>
-      
-      <Text style={styles.disclaimer}>
-        *For demo: Put call on speakerphone so the app can hear the caller.*
-      </Text>
+      <Text style={styles.disclaimer}>*Running in Native Dev Mode*</Text>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#fff',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 20,
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    marginBottom: 40,
-  },
-  indicatorContainer: {
-    width: 250,
-    height: 250,
-    borderRadius: 125,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 50,
-    elevation: 5,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-  },
-  statusText: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: 'white',
-  },
-  subText: {
-    fontSize: 14,
-    color: 'white',
-    marginTop: 10,
-    textAlign: 'center',
-    paddingHorizontal: 20,
-  },
-  button: {
-    paddingHorizontal: 40,
-    paddingVertical: 15,
-    borderRadius: 30,
-  },
-  buttonText: {
-    color: 'white',
-    fontSize: 18,
-    fontWeight: '600',
-  },
-  disclaimer: {
-    marginTop: 30,
-    fontSize: 12,
-    color: '#888',
-    textAlign: 'center',
-  },
+  container: { flex: 1, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center', padding: 20 },
+  title: { fontSize: 28, fontWeight: 'bold', marginBottom: 40 },
+  indicatorContainer: { width: 250, height: 250, borderRadius: 125, justifyContent: 'center', alignItems: 'center', marginBottom: 50, elevation: 5, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.25, shadowRadius: 3.84 },
+  statusText: { fontSize: 32, fontWeight: 'bold', color: 'white' },
+  subText: { fontSize: 14, color: 'white', marginTop: 10, textAlign: 'center', paddingHorizontal: 20 },
+  button: { paddingHorizontal: 40, paddingVertical: 15, borderRadius: 30 },
+  buttonText: { color: 'white', fontSize: 18, fontWeight: '600' },
+  disclaimer: { marginTop: 30, fontSize: 12, color: '#888', textAlign: 'center' },
 });

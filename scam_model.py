@@ -1,35 +1,43 @@
-import random
+import os
 import time
 
 # --- PLACEHOLDER FOR JAM AI ---
-# Import your actual library here, e.g.:
-# from jam_ai import JamModel
+# import jam_ai 
 
 class JamScamDetector:
     def __init__(self):
         print("Initializing JAM AI Model...")
-        # self.model = JamModel.load("scam-detector-v1")
+        # self.model = jam_ai.load_model("scam_v1")
         pass
 
-    def predict(self, audio_data: bytes) -> dict:
-        """
-        Input: Raw audio bytes from the phone.
-        Output: A dictionary with 'is_scam' (bool) and 'confidence' (float).
-        """
+    def predict(self, audio_bytes: bytes) -> dict:
         
-        # TODO: LINK YOUR AI CODE HERE
-        # 1. Convert audio_data to the format JAM AI needs (e.g., numpy array)
-        # 2. result = self.model.predict(audio_data)
+        # 1. Create a unique filename using the current time
+        timestamp = int(time.time())
+        debug_filename = f"chunk_{timestamp}.m4a"
         
-        # MOCK LOGIC FOR DEMO:
-        # We simulate a "Scam" if the logic detects specific frequencies (fake simulation)
-        # In reality, replace this with your model's inference.
-        
-        simulated_score = random.random() # Random float 0.0 to 1.0
-        
-        if simulated_score > 0.8:
-            return {"status": "SCAM", "message": "High likelihood of fraud detected!", "color": "red"}
-        elif simulated_score > 0.5:
-            return {"status": "SUSPICIOUS", "message": "Conversation pattern suspicious.", "color": "orange"}
-        else:
-            return {"status": "SAFE", "message": "Call appears normal.", "color": "green"}
+        try:
+            # 2. Print the size to the terminal
+            # If this number is roughly constant (e.g., exactly 2048 bytes), it might be silence/header only.
+            # If it fluctuates (e.g., 35000, then 42000), that usually means it captured audio.
+            print(f"🎤 Saving {debug_filename} | Size: {len(audio_bytes)} bytes")
+
+            # 3. Write the file
+            with open(debug_filename, "wb") as f:
+                f.write(audio_bytes)
+            
+            return {
+                "status": "SAFE", 
+                "message": "Listening...", 
+                "color": "green"
+            }
+
+        except Exception as e:
+            print(f"Error: {e}")
+            return {"status": "ERROR", "message": "Error", "color": "gray"}
+            
+        finally:
+            # 2. IMPORTANT: Comment this out so you can listen to the file!
+            # if os.path.exists(temp_filename):
+            #    os.remove(temp_filename)
+            pass
