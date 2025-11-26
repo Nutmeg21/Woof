@@ -1,0 +1,15 @@
+{
+  "name": "Woof",
+  "version": "0.0.1",
+  "private": true,
+  "scripts": {
+    "start": "node node_modules/react-native/local-cli/cli.js start"
+  },
+  "dependencies": {
+    "expo": "^54.0.25",
+    "expo-av": "~16.0.7",
+    "expo-file-system": "~19.0.19",
+    "react": "^19.1.1",
+    "react-native": "0.82.1"
+  }
+}
