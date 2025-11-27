@@ -1,11 +1,12 @@
-from fastapi import FastAPI, WebSocket
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from scam_model import JamScamDetector
 import uvicorn
+import json
+import base64
 
 app = FastAPI()
 
-# Allow connections from the app (Cross-Origin Resource Sharing)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -24,24 +25,43 @@ def home():
 @app.websocket("/ws/audio")
 async def audio_stream(websocket: WebSocket):
     await websocket.accept()
-    print("Client connected")
+    print("Client connected - Ready to process data")
     
     try:
         while True:
-            # 1. Receive Audio Chunk from App
-            audio_data = await websocket.receive_bytes()
+            data_text = await websocket.receive_text()
+            data_json = json.loads(data_text)
             
-            # 2. Process with JAM AI
-            result = detector.predict(audio_data)
+            message_type = data_json.get("type")
+
+            if message_type == "audio_chunk":
+                # Decode Base64 back to Audio Bytes
+                audio_bytes = base64.b64decode(data_json["data"])
+                
+                # Process with JAM AI (Audio)
+                result = detector.predict(audio_bytes)
+                
+                # Send Result back to App
+                await websocket.send_json(result)
+
+            elif message_type == "text_message":
+                text_content = data_json["data"]
+                print(f"Received Text: {text_content}")
+                
+                result = detector.predict_text(text_content)
+                
+                # Send Result back to App
+                await websocket.send_json(result)
             
-            # 3. Send Result back to App
-            await websocket.send_json(result)
-            
+    except WebSocketDisconnect:
+        print("Client disconnected")
     except Exception as e:
-        print(f"Connection closed: {e}")
+        print(f"Error: {e}")
     finally:
-        await websocket.close()
+        try:
+            await websocket.close()
+        except:
+            pass
 
 if __name__ == "__main__":
-    # 0.0.0.0 allows your phone to connect to your laptop
     uvicorn.run(app, host="0.0.0.0", port=8000)
