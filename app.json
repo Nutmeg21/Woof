@@ -1,0 +1,51 @@
+{
+  "expo": {
+    "name": "scam-guard-app",
+    "slug": "scam-guard-app",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/woof_logo.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/woof_logo.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.hackathon.scamguard",
+      "infoPlist": {
+        "UIBackgroundModes": [
+          "audio",
+          "fetch"
+        ]
+      }
+    },
+    
+    "plugins": [
+      [
+        "expo-av",
+        {
+          "microphonePermission": "Allow ScamGuard to detect scam calls."
+        }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "extraMavenRepos": [
+              "../../node_modules/@notifee/react-native/android/libs"
+            ]
+          }
+        }
+      ],
+      "expo-asset",
+      "expo-font"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "a13c1257-3152-4580-bb16-b24c06a76cca"
+      }
+    }
+  }
+}
