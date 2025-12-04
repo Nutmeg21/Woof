@@ -25,23 +25,32 @@ def home():
 @app.websocket("/ws/audio")
 async def audio_stream(websocket: WebSocket):
     await websocket.accept()
-    print("Client connected - Ready to process audio")
+    print("Client connected - Ready to process data")
     
     try:
         while True:
-            # 1. Receive JSON Text (contains Base64 audio)
             data_text = await websocket.receive_text()
             data_json = json.loads(data_text)
             
-            if data_json.get("type") == "audio_chunk":
-                # 2. Decode Base64 back to Audio Bytes
-                # This is the actual file content (like a .m4a file in memory)
+            message_type = data_json.get("type")
+
+            if message_type == "audio_chunk":
+                # Decode Base64 back to Audio Bytes
                 audio_bytes = base64.b64decode(data_json["data"])
                 
-                # 3. Process with JAM AI
+                # Process with JAM AI (Audio)
                 result = detector.predict(audio_bytes)
                 
-                # 4. Send Result back to App
+                # Send Result back to App
+                await websocket.send_json(result)
+
+            elif message_type == "text_message":
+                text_content = data_json["data"]
+                print(f"Received Text: {text_content}")
+                
+                result = detector.predict_text(text_content)
+                
+                # Send Result back to App
                 await websocket.send_json(result)
             
     except WebSocketDisconnect:

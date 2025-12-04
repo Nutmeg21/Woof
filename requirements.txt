@@ -1,0 +1,5 @@
+fastapi
+uvicorn
+websockets
+numpy
+# Add your jam-ai library here if it's on pip, e.g., jam-ai
