@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import BudgetScreen from './BudgetScreen';
 import {
   StyleSheet, Text, View, TouchableOpacity, Alert, Animated, Vibration, Platform,
   Modal, Pressable, SafeAreaView, ScrollView, StatusBar, Switch, Linking, TextInput, FlatList
@@ -405,11 +406,12 @@ useEffect(() => {
         {screen === "message" && <MessageScreen />}
         {screen === "notification" && <NotificationScreen />}
         {screen === "settings" && <SettingsScreen />}
+        {screen === "budget" && <BudgetScreen darkMode={settings.darkMode} />}
       </View>
       <View style={[styles.navBar, themeStyles.navBar]}>
-        <NavButton label="Call" active={screen === "call"} onPress={() => setScreen("call")} />
-        <NavButton label="Message" active={screen === "message"} onPress={() => setScreen("message")} />
         <NavButton label="Home" active={screen === "home"} onPress={() => setScreen("home")} />
+        <NavButton label="Budget" active={screen === "budget"} onPress={() => setScreen("budget")} />
+        <NavButton label="Call" active={screen === "call"} onPress={() => setScreen("call")} />
         <NavButton label="Notif" active={screen === "notification"} onPress={() => setScreen("notification")} />
         <NavButton label="Settings" active={screen === "settings"} onPress={() => setScreen("settings")} />
       </View>
