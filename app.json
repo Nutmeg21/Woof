@@ -29,6 +29,7 @@
       },
       "permissions": [
         "android.permission.AUDIO_CAPTURE",
+        "android.permission.READ_SMS",
         "android.permission.RECORD_AUDIO",
         "android.permission.FOREGROUND_SERVICE",
         "android.permission.WAKE_LOCK",

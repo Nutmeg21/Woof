@@ -1,5 +1,7 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, TextInput, Modal, StyleSheet, Alert, Switch } from 'react-native';
+import * as FileSystem from 'expo-file-system';
+import { ensureReadSmsPermission, scrapeBillsAndSubscriptionsFromSms } from './smsBillScraper';
 
 const COLORS = ['#FF6384','#36A2EB','#FFCE56','#4BC0C0','#9966FF','#FF9F40','#E7E9ED'];
 
@@ -27,12 +29,39 @@ const DEFAULT_TXN = [
   { id:6, desc:'McDonald', category:'Food', amount:22.30, date:new Date(Date.now()-12*86400000) },
 ];
 
+const TXN_STORAGE_FILE = FileSystem.documentDirectory
+  ? `${FileSystem.documentDirectory}woof_budget_transactions_v1.json`
+  : null;
+
+const PROCESSED_SMS_STORAGE_FILE = FileSystem.documentDirectory
+  ? `${FileSystem.documentDirectory}woof_budget_processed_sms_v1.json`
+  : null;
+
+async function readJsonFile(path, fallbackValue) {
+  if (!path) return fallbackValue;
+  try {
+    const info = await FileSystem.getInfoAsync(path);
+    if (!info.exists) return fallbackValue;
+    const raw = await FileSystem.readAsStringAsync(path);
+    return JSON.parse(raw);
+  } catch (e) {
+    return fallbackValue;
+  }
+}
+
+async function writeJsonFile(path, value) {
+  if (!path) return;
+  await FileSystem.writeAsStringAsync(path, JSON.stringify(value));
+}
+
 export default function BudgetScreen({ darkMode }) {
   const [tab, setTab] = useState('overview');
   const [txnFilter, setTxnFilter] = useState('week');
   const [categories, setCategories] = useState(DEFAULT_CATEGORIES);
   const [bills, setBills] = useState(DEFAULT_BILLS);
   const [transactions, setTransactions] = useState(DEFAULT_TXN);
+  const [hydrated, setHydrated] = useState(false);
+  const smsScrapeStartedRef = useRef(false);
   const [addModal, setAddModal] = useState(false);
   const [addBillModal, setAddBillModal] = useState(false);
   const [addTxnModal, setAddTxnModal] = useState(false);
@@ -40,6 +69,94 @@ export default function BudgetScreen({ darkMode }) {
   const [newCat, setNewCat] = useState({ name:'', budget:'' });
   const [newBill, setNewBill] = useState({ name:'', amount:'', due:'' });
   const [newTxn, setNewTxn] = useState({ desc:'', category:'Food', amount:'' });
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const parsed = await readJsonFile(TXN_STORAGE_FILE, null);
+        if (!Array.isArray(parsed)) return;
+
+        const revived = parsed
+          .filter(Boolean)
+          .map((t) => ({
+            ...t,
+            amount: Number(t.amount),
+            date: new Date(t.date),
+          }))
+          .filter((t) => Number.isFinite(t.amount) && t.date instanceof Date && !Number.isNaN(t.date.getTime()));
+
+        if (!cancelled && revived.length > 0) setTransactions(revived);
+      } catch (e) {
+        console.warn('Failed to load saved transactions', e);
+      } finally {
+        if (!cancelled) setHydrated(true);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!hydrated) return;
+    (async () => {
+      try {
+        const serializable = transactions.map((t) => ({
+          ...t,
+          date: t.date instanceof Date ? t.date.getTime() : t.date,
+        }));
+        await writeJsonFile(TXN_STORAGE_FILE, serializable);
+      } catch (e) {
+        console.warn('Failed to persist transactions', e);
+      }
+    })();
+  }, [transactions, hydrated]);
+
+  useEffect(() => {
+    if (!hydrated) return;
+    if (smsScrapeStartedRef.current) return;
+    smsScrapeStartedRef.current = true;
+
+    (async () => {
+      try {
+        const permission = await ensureReadSmsPermission();
+        if (!permission.granted) return;
+
+        const candidates = await scrapeBillsAndSubscriptionsFromSms({ daysBack: 30 });
+        if (candidates.length === 0) return;
+
+        const processedList = await readJsonFile(PROCESSED_SMS_STORAGE_FILE, []);
+        const processedKeys = new Set(processedList);
+
+        const newOnes = candidates.filter((c) => c?.key && !processedKeys.has(c.key));
+        if (newOnes.length === 0) return;
+
+        setTransactions((prev) => {
+          const maxId = prev.reduce((m, t) => Math.max(m, Number(t.id) || 0), 0);
+          let nextId = maxId + 1;
+
+          const added = newOnes.map((c) => ({
+            id: nextId++,
+            desc: c.desc,
+            category: c.category,
+            amount: c.amount,
+            date: new Date(c.dateMs),
+          }));
+
+          const merged = [...added, ...prev];
+          merged.sort((a, b) => b.date - a.date);
+          return merged;
+        });
+
+        newOnes.forEach((c) => processedKeys.add(c.key));
+        const trimmed = Array.from(processedKeys).slice(-1500);
+        await writeJsonFile(PROCESSED_SMS_STORAGE_FILE, trimmed);
+      } catch (e) {
+        console.warn('SMS bill scrape failed', e);
+      }
+    })();
+  }, [hydrated]);
 
   const bg = darkMode ? '#151428' : '#f0f4f8';
   const card = darkMode ? '#1f1b2e' : '#fff';
