@@ -32,6 +32,9 @@
         "android.permission.READ_SMS",
         "android.permission.RECORD_AUDIO",
         "android.permission.FOREGROUND_SERVICE",
+        "android.permission.FOREGROUND_SERVICE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION",
         "android.permission.WAKE_LOCK",
         "android.permission.SYSTEM_ALERT_WINDOW",
         "android.permission.MODIFY_AUDIO_SETTINGS"
@@ -43,6 +46,12 @@
         "expo-av",
         {
           "microphonePermission": "Allow ScamGuard to detect scam calls."
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Allow this app to use your location."
         }
       ],
       [

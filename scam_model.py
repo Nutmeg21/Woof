@@ -9,6 +9,27 @@ from dotenv import load_dotenv
 # Load environment variables
 load_dotenv()
 
+# Malaysian Scam Detection Patterns
+SCAM_KEYWORDS = {
+    "high_risk": [
+        "verify account", "confirm identity", "update payment", "urgent action",
+        "claim reward", "winner", "congratulations", "click link", "account suspended",
+        "unusual activity", "confirm otp", "confirm tac", "reset password",
+        "macau scam", "police call", "bank call", "tax refund", "tax investigation",
+        "lottery", "fund transfer", "emergency", "accident", "hospital",
+        "i love you scam", "romance scam", "bitcoin", "cryptocurrency",
+        "western union", "money transfer", "card compromised", "data breach"
+    ],
+    "medium_risk": [
+        "verify", "confirm", "update", "click", "link", "download",
+        "payment", "charge", "bill", "invoice", "receipt"
+    ],
+    "urgency_words": [
+        "immediately", "urgent", "now", "asap", "hurry", "quick",
+        "act now", "don't delay", "limited time", "expires", "today"
+    ]
+}
+
 class JamScamDetector:
     def __init__(self):
         print("Initializing Scam Detector (AssemblyAI + JamAI)...")
@@ -29,8 +50,46 @@ class JamScamDetector:
 
         base_dir = os.path.dirname(os.path.abspath(__file__))
         self.recordings_dir = os.path.join(base_dir, "recordings")
-        if not os.path.exists(self.recordings_dir): os.makedirs(self.recordings_dir)
+        if not os.path.exists(self.recordings_dir): 
+            os.makedirs(self.recordings_dir)
         self.file_toggle = 0
+    
+    def _score_text(self, text: str) -> float:
+        """Heuristic scam scoring (0.0 to 1.0)"""
+        if not text:
+            return 0.0
+        
+        text_lower = text.lower()
+        score = 0.0
+        
+        # High-risk keywords (0.3 points each)
+        for keyword in SCAM_KEYWORDS["high_risk"]:
+            if keyword in text_lower:
+                score += 0.3
+        
+        # Medium-risk keywords (0.1 points each)
+        for keyword in SCAM_KEYWORDS["medium_risk"]:
+            if keyword in text_lower:
+                score += 0.1
+        
+        # Urgency multiplier
+        urgency_count = sum(1 for word in SCAM_KEYWORDS["urgency_words"] if word in text_lower)
+        if urgency_count > 0:
+            score += urgency_count * 0.15
+        
+        # All caps phrases increase suspicion
+        if re.search(r"[A-Z]{5,}", text):
+            score += 0.1
+        
+        # Links/URLs in transcription
+        if re.search(r"http|link|click|download", text_lower):
+            score += 0.2
+        
+        # Multiple exclamation marks
+        if text.count("!") > 2:
+            score += 0.1
+        
+        return min(score, 1.0)
 
     def transcribe_audio(self, file_path: str) -> str:
         print(f"  - Transcribing {os.path.basename(file_path)}...")
