@@ -1,0 +1,11 @@
+{
+  "java.import.exclusions": [
+    "**/node_modules/**",
+    "**/.expo/**",
+    "**/android/**",
+    "**/ios/**",
+    "**/build/**"
+  ],
+  "java.configuration.updateBuildConfiguration": "disabled",
+  "java.autobuild.enabled": false
+}
