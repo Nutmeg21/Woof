@@ -13,12 +13,12 @@ import * as TaskManager from 'expo-task-manager';
 import * as Contacts from 'expo-contacts';
 
 // Configuration
-const SERVER_URL = 'ws://0.0.0.0:8000/ws/audio'; 
+const SERVER_URL = 'ws://0.0.0.0:8000/ws/audio';
 const LOCATION_TASK_NAME = 'background-location-task';
 
 // Mock Data
 const MOCK_CALL_HISTORY = [
-  { id: 1, number: "0123 456 7899", type: "Warning", status: "Blocked by Woof!", time: "1 min ago" },
+  { id: 1, number: "0123 456 7899", type: "Warning", status: "Blocked by Walley", time: "1 min ago" },
   { id: 2, number: "+60 19 123 4567", type: "Safe", status: "Jane Doe", time: "2 hrs ago" },
   { id: 3, number: "Unknown", type: "Spam", status: "Marked as Spam", time: "Yesterday" },
 ];
@@ -41,50 +41,50 @@ Notifications.setNotificationHandler({
 });
 
 export default function App() {
-  const [screen, setScreen] = useState("home"); 
+  const [screen, setScreen] = useState("home");
   const [settings, setSettings] = useState({ scamDetectionEnabled: false, darkMode: false });
-  
+
   const [modalVisible, setModalVisible] = useState(false);
   const [modalMessage, setModalMessage] = useState("");
   const [modalActions, setModalActions] = useState([]);
   const [indicatorVisible, setIndicatorVisible] = useState(false);
   const [lastConfidence, setLastConfidence] = useState(null);
-  
+
   const [scamStatus, setScamStatus] = useState({ status: 'IDLE', message: 'Ready to protect', color: '#10b981' });
   const [contacts, setContacts] = useState([]);
   const [smsText, setSmsText] = useState("");
-  
+
   const socketRef = useRef(null);
   const pulse = useRef(new Animated.Value(1)).current;
   const isMonitoringRef = useRef(false);
   const recordingRef = useRef(null);
   const hasAlertedRef = useRef(false);
 
-useEffect(() => {
+  useEffect(() => {
     (async () => {
       // Request Audio & Notifications
       await Audio.requestPermissionsAsync();
       await Notifications.requestPermissionsAsync();
-      
+
       // Request Background Location
       await Location.requestForegroundPermissionsAsync();
       await Location.requestBackgroundPermissionsAsync();
-      
+
       // Request Contacts
       const { status } = await Contacts.requestPermissionsAsync();
-      
+
       if (status === 'granted') {
         const { data } = await Contacts.getContactsAsync({
           fields: [Contacts.Fields.PhoneNumbers],
         });
         if (data.length > 0) {
-          setContacts(data.slice(0, 20)); 
+          setContacts(data.slice(0, 20));
         }
       } else {
         // Alert if permission was denied previously
         Alert.alert(
-            "Permission Required", 
-            "Please go to Settings > Apps > ScamGuard and enable Contacts to use the Call feature."
+          "Permission Required",
+          "Please go to Settings > Apps > Walley and enable Contacts to use the Call feature."
         );
       }
     })();
@@ -108,26 +108,26 @@ useEffect(() => {
 
   const analyzeText = () => {
     if (!socketRef.current || socketRef.current.readyState !== WebSocket.OPEN) {
-        const ws = new WebSocket(SERVER_URL);
-        ws.onopen = () => ws.send(JSON.stringify({ type: "text_message", data: smsText }));
-        ws.onmessage = (event) => {
-            const data = JSON.parse(event.data);
-            Alert.alert(data.status, data.message);
-            ws.close();
-        };
+      const ws = new WebSocket(SERVER_URL);
+      ws.onopen = () => ws.send(JSON.stringify({ type: "text_message", data: smsText }));
+      ws.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        Alert.alert(data.status, data.message);
+        ws.close();
+      };
     } else {
-        socketRef.current.send(JSON.stringify({ type: "text_message", data: smsText }));
+      socketRef.current.send(JSON.stringify({ type: "text_message", data: smsText }));
     }
   };
 
   const triggerScamAlert = async (data) => {
-    if (hasAlertedRef.current) return; 
+    if (hasAlertedRef.current) return;
     hasAlertedRef.current = true;
     setLastConfidence(data.confidence || 95);
     setModalMessage(data.message || "Suspicious activity detected.");
     setModalActions([
-        { label: "End Call", action: () => { stopMonitoring(); setModalVisible(false); } },
-        { label: "Ignore", action: () => { setModalVisible(false); } }
+      { label: "End Call", action: () => { stopMonitoring(); setModalVisible(false); } },
+      { label: "Ignore", action: () => { setModalVisible(false); } }
     ]);
     setIndicatorVisible(true);
     setModalVisible(true);
@@ -142,12 +142,12 @@ useEffect(() => {
   // Audio Loop
   const cleanupRecording = async () => {
     if (recordingRef.current) {
-        try {
-            const status = await recordingRef.current.getStatusAsync();
-            if (status.isLoaded) await recordingRef.current.stopAndUnloadAsync();
-            else await recordingRef.current.unloadAsync(); 
-        } catch (error) { }
-        recordingRef.current = null;
+      try {
+        const status = await recordingRef.current.getStatusAsync();
+        if (status.isLoaded) await recordingRef.current.stopAndUnloadAsync();
+        else await recordingRef.current.unloadAsync();
+      } catch (error) { }
+      recordingRef.current = null;
     }
     await new Promise(resolve => setTimeout(resolve, 200));
   };
@@ -159,39 +159,39 @@ useEffect(() => {
 
   const runRecordingLoop = async () => {
     while (isMonitoringRef.current) {
+      try {
+        await cleanupRecording();
+        if (!isMonitoringRef.current) break;
+
+        const recording = new Audio.Recording();
         try {
-            await cleanupRecording();
-            if (!isMonitoringRef.current) break;
-
-            const recording = new Audio.Recording();
-            try {
-                await recording.prepareToRecordAsync(SPEAKERPHONE_OPTIONS);
-                await recording.startAsync();
-                recordingRef.current = recording;
-            } catch (prepError) {
-                await new Promise(resolve => setTimeout(resolve, 2000));
-                continue; 
-            }
-
-            await new Promise(resolve => setTimeout(resolve, 10000)); 
-
-            if (recordingRef.current && isMonitoringRef.current) {
-                try { await recordingRef.current.stopAndUnloadAsync(); } 
-                catch (e) { recordingRef.current = null; continue; }
-
-                const uri = recordingRef.current.getURI();
-                recordingRef.current = null;
-
-                if (uri && socketRef.current?.readyState === WebSocket.OPEN) {
-                    const base64Data = await FileSystem.readAsStringAsync(uri, { encoding: 'base64' });
-                    socketRef.current.send(JSON.stringify({ type: "audio_chunk", data: base64Data }));
-                    await FileSystem.deleteAsync(uri, { idempotent: true });
-                }
-            }
-        } catch (err) {
-            await cleanupRecording();
-            await new Promise(resolve => setTimeout(resolve, 2000));
+          await recording.prepareToRecordAsync(SPEAKERPHONE_OPTIONS);
+          await recording.startAsync();
+          recordingRef.current = recording;
+        } catch (prepError) {
+          await new Promise(resolve => setTimeout(resolve, 2000));
+          continue;
         }
+
+        await new Promise(resolve => setTimeout(resolve, 10000));
+
+        if (recordingRef.current && isMonitoringRef.current) {
+          try { await recordingRef.current.stopAndUnloadAsync(); }
+          catch (e) { recordingRef.current = null; continue; }
+
+          const uri = recordingRef.current.getURI();
+          recordingRef.current = null;
+
+          if (uri && socketRef.current?.readyState === WebSocket.OPEN) {
+            const base64Data = await FileSystem.readAsStringAsync(uri, { encoding: 'base64' });
+            socketRef.current.send(JSON.stringify({ type: "audio_chunk", data: base64Data }));
+            await FileSystem.deleteAsync(uri, { idempotent: true });
+          }
+        }
+      } catch (err) {
+        await cleanupRecording();
+        await new Promise(resolve => setTimeout(resolve, 2000));
+      }
     }
   };
 
@@ -209,12 +209,12 @@ useEffect(() => {
 
       await Location.startLocationUpdatesAsync(LOCATION_TASK_NAME, {
         accuracy: Location.Accuracy.BestForNavigation, timeInterval: 2000, distanceInterval: 1,
-        foregroundService: { notificationTitle: "Woof! Active", notificationBody: "Listening...", notificationColor: "#FF9301" },
+        foregroundService: { notificationTitle: "Walley Active", notificationBody: "Listening...", notificationColor: "#FF9301" },
       });
 
       const ws = new WebSocket(SERVER_URL);
       socketRef.current = ws;
-      
+
       ws.onopen = () => {
         setScamStatus({ status: 'SAFE', message: 'Protected.', color: '#10b981' });
         runRecordingLoop();
@@ -222,13 +222,13 @@ useEffect(() => {
 
       ws.onmessage = (event) => {
         try {
-            const data = JSON.parse(event.data);
-            let uiColor = '#10b981'; 
-            if (data.status === 'SCAM') uiColor = '#ef4444';
-            if (data.status === 'SUSPICIOUS') uiColor = '#FE9301';
-            setScamStatus({ status: data.status, message: data.message, color: uiColor });
-            if (data.status === 'SCAM') triggerScamAlert(data);
-            if (data.status !== 'SAFE' && !isMonitoringRef.current) Alert.alert(data.status, data.message);
+          const data = JSON.parse(event.data);
+          let uiColor = '#10b981';
+          if (data.status === 'SCAM') uiColor = '#ef4444';
+          if (data.status === 'SUSPICIOUS') uiColor = '#FE9301';
+          setScamStatus({ status: data.status, message: data.message, color: uiColor });
+          if (data.status === 'SCAM') triggerScamAlert(data);
+          if (data.status !== 'SAFE' && !isMonitoringRef.current) Alert.alert(data.status, data.message);
         } catch (e) { }
       };
 
@@ -240,32 +240,32 @@ useEffect(() => {
     isMonitoringRef.current = false;
     hasAlertedRef.current = false;
     if (updateUI) {
-        setSettings(s => ({ ...s, scamDetectionEnabled: false }));
-        setScamStatus({ status: 'IDLE', message: 'Ready to protect', color: '#6b7280' });
-        setIndicatorVisible(false);
+      setSettings(s => ({ ...s, scamDetectionEnabled: false }));
+      setScamStatus({ status: 'IDLE', message: 'Ready to protect', color: '#6b7280' });
+      setIndicatorVisible(false);
     }
     await cleanupRecording();
     Speech.stop();
-    try { await Location.stopLocationUpdatesAsync(LOCATION_TASK_NAME); } catch (e) {}
+    try { await Location.stopLocationUpdatesAsync(LOCATION_TASK_NAME); } catch (e) { }
     if (socketRef.current) { socketRef.current.close(); socketRef.current = null; }
   };
 
   const toggleProtection = () => {
-      if (settings.scamDetectionEnabled) stopMonitoring(); else startMonitoring();
+    if (settings.scamDetectionEnabled) stopMonitoring(); else startMonitoring();
   };
 
   function SafetyStatusCard() {
     return (
       <View style={[styles.card, { borderColor: scamStatus.color, borderWidth: 2, backgroundColor: cardBg }]}>
-        <View style={{flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center'}}>
-            <Text style={[styles.cardTitle, { color: textColor }]}>Protection Status</Text>
-            <Switch value={settings.scamDetectionEnabled} onValueChange={toggleProtection} trackColor={{ false: "#767577", true: "#FE9301" }} />
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Text style={[styles.cardTitle, { color: textColor }]}>Protection Status</Text>
+          <Switch value={settings.scamDetectionEnabled} onValueChange={toggleProtection} trackColor={{ false: "#767577", true: "#FE9301" }} />
         </View>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
           <View style={[styles.iconCircle, { backgroundColor: scamStatus.color }]}>
             <Text style={{ fontWeight: "800", color: "#fff", fontSize: 18 }}>{scamStatus.status === 'SAFE' ? "✓" : "!"}</Text>
           </View>
-          <View style={{flex: 1}}>
+          <View style={{ flex: 1 }}>
             <Text style={[styles.statusText, { color: scamStatus.color }]}>{scamStatus.status}</Text>
             <Text style={styles.smallText}>{scamStatus.message}</Text>
           </View>
@@ -281,16 +281,16 @@ useEffect(() => {
         <View style={[styles.card, { backgroundColor: cardBg }]}>
           <ScrollView style={{ maxHeight: 200 }}>
             {MOCK_CALL_HISTORY.map((call) => (
-                <View key={call.id} style={styles.callRow}>
-                  <View style={[styles.callIcon, call.type === 'Warning' ? styles.iconWarning : call.type === 'Spam' ? {backgroundColor:'#ef4444'} : styles.iconSafe]}>
-                    <Text style={{ color: "#fff", fontWeight: "700" }}>{call.type === 'Safe' ? "✓" : "!"}</Text>
-                  </View>
-                  <View style={{ flex: 1, marginLeft: 10 }}>
-                    <Text style={{fontWeight:'700', color: textColor}}>{call.number}</Text>
-                    <Text style={[styles.smallText, { color: subTextColor }]}>{call.status}</Text>
-                  </View>
-                  <Text style={[styles.smallText, { color: subTextColor }]}>{call.time}</Text>
+              <View key={call.id} style={styles.callRow}>
+                <View style={[styles.callIcon, call.type === 'Warning' ? styles.iconWarning : call.type === 'Spam' ? { backgroundColor: '#ef4444' } : styles.iconSafe]}>
+                  <Text style={{ color: "#fff", fontWeight: "700" }}>{call.type === 'Safe' ? "✓" : "!"}</Text>
                 </View>
+                <View style={{ flex: 1, marginLeft: 10 }}>
+                  <Text style={{ fontWeight: '700', color: textColor }}>{call.number}</Text>
+                  <Text style={[styles.smallText, { color: subTextColor }]}>{call.status}</Text>
+                </View>
+                <Text style={[styles.smallText, { color: subTextColor }]}>{call.time}</Text>
+              </View>
             ))}
           </ScrollView>
         </View>
@@ -304,15 +304,15 @@ useEffect(() => {
         <SafetyStatusCard />
         <CallHistoryList />
         <View>
-            <Text style={[styles.sectionTitle, { color: textColor }]}>Scam News (Malaysia)</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginLeft: -5 }}>
-                {MALAYSIA_NEWS.map((news) => (
-                    <TouchableOpacity key={news.id} onPress={() => openNews(news.url)} style={[styles.newsCard, { backgroundColor: cardBg }]}>
-                        <Text style={[styles.newsTitle, { color: textColor }]}>{news.title}</Text>
-                        <Text style={styles.newsSource}>{news.source}</Text>
-                    </TouchableOpacity>
-                ))}
-            </ScrollView>
+          <Text style={[styles.sectionTitle, { color: textColor }]}>Scam News (Malaysia)</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginLeft: -5 }}>
+            {MALAYSIA_NEWS.map((news) => (
+              <TouchableOpacity key={news.id} onPress={() => openNews(news.url)} style={[styles.newsCard, { backgroundColor: cardBg }]}>
+                <Text style={[styles.newsTitle, { color: textColor }]}>{news.title}</Text>
+                <Text style={styles.newsSource}>{news.source}</Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
         </View>
       </ScrollView>
     );
@@ -322,18 +322,18 @@ useEffect(() => {
     return (
       <ScrollView contentContainerStyle={{ padding: 16, gap: 16 }}>
         <Text style={[styles.hugeTitle, { color: textColor }]}>Contacts</Text>
-        {contacts.length === 0 ? <Text style={{color: subTextColor}}>Loading contacts...</Text> : contacts.map((c, i) => (
-            c.phoneNumbers && (
-                <View key={i} style={[styles.contactRowCard, { backgroundColor: cardBg }]}>
-                    <View>
-                        <Text style={{ fontWeight: "700", fontSize: 16, color: textColor }}>{c.name}</Text>
-                        <Text style={[styles.smallText, { color: subTextColor }]}>{c.phoneNumbers[0].number}</Text>
-                    </View>
-                    <TouchableOpacity onPress={() => callNumber(c.phoneNumbers[0].number)} style={[styles.bigButton]}>
-                        <Text style={{ color: "#fff", fontWeight: "700" }}>Call</Text>
-                    </TouchableOpacity>
-                </View>
-            )
+        {contacts.length === 0 ? <Text style={{ color: subTextColor }}>Loading contacts...</Text> : contacts.map((c, i) => (
+          c.phoneNumbers && (
+            <View key={i} style={[styles.contactRowCard, { backgroundColor: cardBg }]}>
+              <View>
+                <Text style={{ fontWeight: "700", fontSize: 16, color: textColor }}>{c.name}</Text>
+                <Text style={[styles.smallText, { color: subTextColor }]}>{c.phoneNumbers[0].number}</Text>
+              </View>
+              <TouchableOpacity onPress={() => callNumber(c.phoneNumbers[0].number)} style={[styles.bigButton]}>
+                <Text style={{ color: "#fff", fontWeight: "700" }}>Call</Text>
+              </TouchableOpacity>
+            </View>
+          )
         ))}
       </ScrollView>
     );
@@ -344,24 +344,24 @@ useEffect(() => {
       <ScrollView contentContainerStyle={{ padding: 16, gap: 16 }}>
         <Text style={[styles.hugeTitle, { color: textColor }]}>SMS Scanner</Text>
         <View style={[styles.card, { backgroundColor: cardBg }]}>
-           <TextInput 
-                style={[styles.inputBox, { backgroundColor: inputBg, color: textColor }]} 
-                placeholderTextColor={subTextColor}
-                multiline 
-                placeholder="Paste suspicious SMS here..." 
-                value={smsText} 
-                onChangeText={setSmsText} 
-           />
-           <TouchableOpacity onPress={analyzeText} style={[styles.bigButton, {marginTop: 10}]}>
-              <Text style={{ color: "#fff", fontWeight: "700" }}>Analyze Text</Text>
-           </TouchableOpacity>
+          <TextInput
+            style={[styles.inputBox, { backgroundColor: inputBg, color: textColor }]}
+            placeholderTextColor={subTextColor}
+            multiline
+            placeholder="Paste suspicious SMS here..."
+            value={smsText}
+            onChangeText={setSmsText}
+          />
+          <TouchableOpacity onPress={analyzeText} style={[styles.bigButton, { marginTop: 10 }]}>
+            <Text style={{ color: "#fff", fontWeight: "700" }}>Analyze Text</Text>
+          </TouchableOpacity>
         </View>
         <Text style={[styles.sectionTitle, { color: textColor }]}>Recent Messages</Text>
         <View style={[styles.card, { backgroundColor: cardBg }]}>
-            <View style={styles.callRow}>
-                <View style={{flex:1}}><Text style={{fontWeight:'700', color: textColor}}>Unknown: You won RM5000!</Text></View>
-                <TouchableOpacity onPress={() => {setSmsText("You won RM5000!"); analyzeText();}}><Text style={{color:'#FE9301'}}>Check</Text></TouchableOpacity>
-            </View>
+          <View style={styles.callRow}>
+            <View style={{ flex: 1 }}><Text style={{ fontWeight: '700', color: textColor }}>Unknown: You won RM5000!</Text></View>
+            <TouchableOpacity onPress={() => { setSmsText("You won RM5000!"); analyzeText(); }}><Text style={{ color: '#FE9301' }}>Check</Text></TouchableOpacity>
+          </View>
         </View>
       </ScrollView>
     );
@@ -397,7 +397,7 @@ useEffect(() => {
     <SafeAreaView style={[styles.container, themeStyles.container]}>
       <StatusBar barStyle={settings.darkMode ? "light-content" : "dark-content"} />
       <View style={[styles.header, themeStyles.header]}>
-        <Text style={[styles.title, { color: "#FE9301", fontWeight: "800" }]}>Woof!</Text>
+        <Text style={[styles.title, { color: "#FE9301", fontWeight: "800" }]}>Walley</Text>
         <Text style={[styles.headerTime, { color: subTextColor }]}>Demo Mode</Text>
       </View>
       <View style={{ flex: 1 }}>
@@ -410,12 +410,11 @@ useEffect(() => {
       </View>
       <View style={[styles.navBar, themeStyles.navBar]}>
         <NavButton label="Home" active={screen === "home"} onPress={() => setScreen("home")} />
+        <NavButton label="Finance" active={screen === "finance"} onPress={() => setScreen("finance")} />
         <NavButton label="Budget" active={screen === "budget"} onPress={() => setScreen("budget")} />
-        <NavButton label="Call" active={screen === "call"} onPress={() => setScreen("call")} />
-        <NavButton label="Notif" active={screen === "notification"} onPress={() => setScreen("notification")} />
         <NavButton label="Settings" active={screen === "settings"} onPress={() => setScreen("settings")} />
       </View>
-      
+
       {/* ALERTS */}
       {indicatorVisible && (
         <Animated.View style={[styles.floatingIndicator, { transform: [{ scale: pulse }] }]}>

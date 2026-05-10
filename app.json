@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "scam-guard-app",
-    "slug": "scam-guard-app",
+    "name": "Walley",
+    "slug": "walley",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/woof_logo.png",
@@ -45,7 +45,7 @@
       [
         "expo-av",
         {
-          "microphonePermission": "Allow ScamGuard to detect scam calls."
+          "microphonePermission": "Allow Walley to detect scam calls."
         }
       ],
       [

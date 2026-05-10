@@ -186,38 +186,42 @@ export default function BudgetScreen({ darkMode }) {
   const unpaidBills = bills.filter(b => !b.paid);
   const totalBills = unpaidBills.reduce((s,b) => s+b.amount, 0);
 
-  function PieChart({ data, total }) {
+  function SpendingChart({ data, total }) {
     if (total === 0) return <Text style={{ color: sub, textAlign:'center', marginVertical:20 }}>No spending data yet.</Text>;
-    let startAngle = 0;
-    const size = 160;
-    const cx = size/2, cy = size/2, r = 60, stroke = 28;
-    const circumference = 2 * Math.PI * r;
+
     const slices = data.map(d => {
       const pct = total > 0 ? d.spent / total : 0;
-      const dash = pct * circumference;
-      const offset = -startAngle * circumference / (2 * Math.PI);
-      startAngle += pct * 2 * Math.PI;
-      return { ...d, dash, offset, pct };
+      return { ...d, pct };
     }).filter(d => d.spent > 0);
+
     return (
-      <View style={{ alignItems:'center', marginVertical:10 }}>
-        <View style={{ width:size, height:size }}>
-          {slices.map((s,i) => (
-            <View key={i} style={[StyleSheet.absoluteFill, { borderRadius:size/2, borderWidth:stroke, borderColor:s.color, opacity: s.pct }]} />
-          ))}
-          <View style={{ position:'absolute', top:size/2-30, left:size/2-30, width:60, height:60, borderRadius:30, backgroundColor:card, alignItems:'center', justifyContent:'center' }}>
-            <Text style={{ fontSize:11, fontWeight:'800', color:accent }}>RM{total.toFixed(0)}</Text>
-            <Text style={{ fontSize:9, color:sub }}>spent</Text>
-          </View>
+      <View style={{ marginVertical: 10, paddingHorizontal: 4 }}>
+
+        {/* Total Spent Display */}
+        <View style={{ alignItems: 'center', marginBottom: 18 }}>
+          <Text style={{ fontSize: 13, color: sub, fontWeight: '600', marginBottom: 2 }}>Total Month Spend</Text>
+          <Text style={{ fontSize: 28, fontWeight: '900', color: txt }}>RM {total.toFixed(2)}</Text>
         </View>
-        <View style={{ flexDirection:'row', flexWrap:'wrap', justifyContent:'center', marginTop:8, gap:6 }}>
-          {slices.map((s,i) => (
-            <View key={i} style={{ flexDirection:'row', alignItems:'center', gap:4, marginHorizontal:4 }}>
-              <View style={{ width:10, height:10, borderRadius:5, backgroundColor:s.color }} />
-              <Text style={{ fontSize:11, color:txt }}>{s.name} {(s.pct*100).toFixed(0)}%</Text>
+
+        {/* Multi-Color Segmented Bar */}
+        <View style={{ height: 16, borderRadius: 8, flexDirection: 'row', overflow: 'hidden', backgroundColor: '#e5e7eb', marginBottom: 20 }}>
+          {slices.map((s, i) => (
+            <View key={i} style={{ width: `${s.pct * 100}%`, backgroundColor: s.color, height: '100%' }} />
+          ))}
+        </View>
+
+        {/* Color Legend & Percentages */}
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center' }}>
+          {slices.map((s, i) => (
+            <View key={i} style={{ flexDirection: 'row', alignItems: 'center', marginHorizontal: 8, marginBottom: 8 }}>
+              <View style={{ width: 14, height: 14, borderRadius: 7, backgroundColor: s.color, marginRight: 6 }} />
+              <Text style={{ fontSize: 13, color: txt, fontWeight: '700' }}>
+                {s.name} <Text style={{ color: sub, fontWeight: '600' }}>{(s.pct * 100).toFixed(0)}%</Text>
+              </Text>
             </View>
           ))}
         </View>
+
       </View>
     );
   }
@@ -259,7 +263,7 @@ export default function BudgetScreen({ darkMode }) {
         </View>
         <View style={[styles.card, { backgroundColor:card }]}>
           <Text style={[styles.sectionTitle, { color:txt }]}>Spending by Category</Text>
-          <PieChart data={spentByCategory} total={totalSpent} />
+          <SpendingChart data={spentByCategory} total={totalSpent} />
         </View>
         <View style={[styles.card, { backgroundColor:card }]}>
           <Text style={[styles.sectionTitle, { color:txt }]}>Categories</Text>

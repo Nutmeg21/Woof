@@ -23,7 +23,7 @@ export async function ensureReadSmsPermission() {
 
   const result = await PermissionsAndroid.request(permission, {
     title: 'Allow SMS access',
-    message: 'Woof needs SMS access to detect bills/subscriptions and record them as transactions.',
+    message: 'Walley needs SMS access to detect bills/subscriptions and record them as transactions.',
     buttonPositive: 'Allow',
     buttonNegative: 'Deny',
   });

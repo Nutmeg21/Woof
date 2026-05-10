@@ -16,7 +16,7 @@ import {
 } from "react-native";
 
 /**
- * Expo-ready React Native conversion of the "Woof! Scam Detector App"
+ * Expo-ready React Native conversion of the "Walley Scam Detector App"
  * - Single-file App.js
  * - Mock Firebase mode (no real network)
  * - Mock scam detection (random)
@@ -33,7 +33,7 @@ import {
    Mock Data & Utility
    ------------------------- */
 const initialCallHistory = [
-  { id: 1, number: "0123 456 7899", type: "Warning", status: "Blocked by Woof!", time: "1 minute ago" },
+  { id: 1, number: "0123 456 7899", type: "Warning", status: "Blocked by Walley", time: "1 minute ago" },
   { id: 2, number: "+60 19 123 4567", type: "Safe", status: "Contact: Jane Doe", time: "2 hours ago" },
   { id: 3, number: "Unknown Number", type: "Spam", status: "Marked as Spam", time: "Yesterday" },
   { id: 4, number: "03 8888 1234", type: "Safe", status: "Unanswered", time: "3 days ago" },
@@ -80,7 +80,7 @@ export default function App() {
     // Show initial modal on first load if warning is active
     if (screen === "home" && isWarning) {
       setModalMessage(
-        "Woof! This number (0123 456 7899) has been reported for impersonation and unsolicited payment requests. DO NOT respond to unknown payment requests or provide personal information."
+        "Walley: This number (0123 456 7899) has been reported for impersonation and unsolicited payment requests. DO NOT respond to unknown payment requests or provide personal information."
       );
       setModalActions([{ label: "Block and Report Source", action: () => takeAction("home", "block_report") }]);
       setTimeout(() => setModalVisible(true), 400);
@@ -104,7 +104,7 @@ export default function App() {
   }
 
   function alertUser(text) {
-    Alert.alert("Woof!", text);
+    Alert.alert("Walley", text);
   }
 
 
@@ -244,7 +244,7 @@ function CallHistoryList() {
   function CallScreen() {
     return (
       <ScrollView contentContainerStyle={{ padding: 16, gap: 16 }}>
-        <Text style={styles.hugeTitle}>Woof! Call/Contacts</Text>
+        <Text style={styles.hugeTitle}>Walley Call/Contacts</Text>
         <View style={styles.card}>
           <View style={styles.contactRow}>
             <View>
@@ -276,7 +276,7 @@ function CallHistoryList() {
   function MessageScreen() {
     return (
       <ScrollView contentContainerStyle={{ padding: 16, gap: 16 }}>
-        <Text style={styles.hugeTitle}>Woof! Messaging</Text>
+        <Text style={styles.hugeTitle}>Walley Messaging</Text>
 
 Janisa Goh, [25/11/2025 5:07 PM]
 <View style={styles.card}>
@@ -311,12 +311,12 @@ Janisa Goh, [25/11/2025 5:07 PM]
       { id: 1, type: "Alert", content: "Suspicious call detected 2 minutes ago.", time: "1:17 PM", color: "#ef4444" },
       { id: 2, type: "Update", content: "New scam database update installed.", time: "10:00 AM", color: "#10b981" },
       { id: 3, type: "Warning", content: "New message from blocked number.", time: "Yesterday", color: "#FE9301" },
-      { id: 4, type: "Info", content: "Welcome to Woof! Your protection is active.", time: "Nov 20", color: "#FE9301" },
+      { id: 4, type: "Info", content: "Welcome to Walley! Your protection is active.", time: "Nov 20", color: "#FE9301" },
     ];
 
     return (
       <ScrollView contentContainerStyle={{ padding: 16, gap: 12 }}>
-        <Text style={styles.hugeTitle}>Woof! Notifications</Text>
+        <Text style={styles.hugeTitle}>Walley Notifications</Text>
         {mockNotifications.map((n) => (
           <View key={n.id} style={[styles.card, { borderLeftWidth: 4, borderLeftColor: n.color }]}>
             <Text style={{ fontWeight: "700" }}>{n.type}: {n.content}</Text>
@@ -333,7 +333,7 @@ Janisa Goh, [25/11/2025 5:07 PM]
   function SettingsScreen() {
     return (
       <ScrollView contentContainerStyle={{ padding: 16, gap: 12 }}>
-        <Text style={styles.hugeTitle}>Woof! Settings</Text>
+        <Text style={styles.hugeTitle}>Walley Settings</Text>
 
         <View style={styles.cardRow}>
           <Text style={{ fontWeight: "700" }}>Scam Detection</Text>
@@ -367,7 +367,7 @@ return (
       <StatusBar barStyle={settings.darkMode ? "light-content" : "dark-content"} />
       {/* Header */}
       <View style={[styles.header, themeStyles.header]}>
-        <Text style={[styles.title, { color: "#FE9301", fontWeight: "800" }]}>Woof!</Text>
+        <Text style={[styles.title, { color: "#FE9301", fontWeight: "800" }]}>Walley</Text>
         <Text style={styles.headerTime}>1:28 PM</Text>
       </View>
 
