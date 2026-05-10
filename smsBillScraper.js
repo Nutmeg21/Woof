@@ -2,7 +2,7 @@ import { PermissionsAndroid, Platform } from 'react-native';
 import SmsAndroid from 'react-native-get-sms-android';
 
 const DEFAULT_INCLUDE_REGEX =
-  '(bill|invoice|statement|amount\\s*due|total\\s*due|due\\s*date|subscription|auto\\s*renew|autopay|charged|renewal|unifi|tnb|astro|maxis|celcom|digi|tm|time|indah\\s*water|syabas|air\\s*selangor|rm|myr)';
+  '(bill|invoice|statement|amount\\s*due|total\\s*due|due\\s*date|subscription|auto\\s*renew|autopay|charged|renewal|payment|successful|confirmed|deducted|balance|unifi|tnb|astro|maxis|celcom|digi|tm|time|indah\\s*water|syabas|air\\s*selangor|rm|myr)';
 
 const DEFAULT_EXCLUDE_REGEX =
   '(otp|tac|verification|verifikasi|kata\\s*laluan|password|pin|kod\\s*pengesahan|one\\s*time\\s*password)';
@@ -85,10 +85,16 @@ function isBillLike(text) {
 
 function guessMerchant(address, body) {
   const addr = normalizeText(address);
-  if (addr && /[A-Za-z]/.test(addr) && addr.length <= 15) return addr;
+  // Accept both alphabetic names AND numeric short codes (e.g. 62003 for Maxis)
+  if (addr && addr.length <= 15) return addr;
 
   const text = normalizeText(body);
-  const fromMatch = text.match(/(?:from|daripada)\s+([A-Za-z0-9 &.'-]{3,30})/i);
+
+  // Try to find a known telco/brand name mentioned in the body
+  const telcoMatch = text.match(/(Maxis|Celcom|Digi|Unifi|TM|TNB|Astro|Time|Syabas|Indah Water|Air Selangor|Spotify|Netflix|Disney\+)/i);
+  if (telcoMatch?.[1]) return telcoMatch[1];
+
+  const fromMatch = text.match(/(?:from|daripada|kepada|to)\s+([A-Za-z0-9 &.'-]{3,30})/i);
   if (fromMatch?.[1]) return normalizeText(fromMatch[1]);
 
   return addr || 'Bill';
@@ -121,10 +127,15 @@ function stableSmsKey(message) {
 
 export function smsToBillTransactionCandidate(message) {
   const body = message?.body;
-  if (!isBillLike(body)) return null;
+  const billLike = isBillLike(body);
+  console.log(`[SMS] From: ${message?.address} | Match: ${billLike} | "${body?.substring(0, 60)}..."`);
+  if (!billLike) return null;
 
   const amount = extractAmount(body);
-  if (!amount) return null;
+  if (!amount) {
+    console.log(`[SMS] ⚠️ No amount found in: "${body?.substring(0, 60)}..."`);
+    return null;
+  }
 
   const merchant = guessMerchant(message?.address, body);
   const category = guessCategory(merchant, body);
@@ -144,21 +155,30 @@ export function smsToBillTransactionCandidate(message) {
   };
 }
 
-export async function scrapeBillsAndSubscriptionsFromSms({ daysBack = 30 } = {}) {
+export async function scrapeBillsAndSubscriptionsFromSms({ daysBack = 180 } = {}) {
   if (Platform.OS !== 'android') return [];
 
   const minDate = Date.now() - daysBack * 24 * 60 * 60 * 1000;
 
+  // NOTE: Do NOT pass bodyRegex here — Android's SMS content provider does not
+  // reliably support complex regex patterns and silently returns 0 results.
+  // We fetch all inbox SMS in the date range and filter in JS instead.
   const filter = {
     box: 'inbox',
     minDate,
-    bodyRegex: DEFAULT_INCLUDE_REGEX,
+    maxCount: 500, // safety cap — adjust higher if needed
   };
 
+  console.log(`[SMS SCRAPER] 📱 Scanning ${daysBack} days of SMS...`);
   const messages = await listSms(filter);
+  console.log(`[SMS SCRAPER] 📨 Fetched ${messages.length} total SMS, now filtering in JS...`);
+
   const candidates = messages
     .map(smsToBillTransactionCandidate)
     .filter(Boolean);
+
+  console.log(`[SMS SCRAPER] ✅ Extracted ${candidates.length} valid transactions:`);
+  candidates.forEach(c => console.log(`   → ${c.merchant}: RM${c.amount}`));
 
   // Most recent first
   candidates.sort((a, b) => b.dateMs - a.dateMs);

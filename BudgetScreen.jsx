@@ -123,7 +123,7 @@ export default function BudgetScreen({ darkMode }) {
         const permission = await ensureReadSmsPermission();
         if (!permission.granted) return;
 
-        const candidates = await scrapeBillsAndSubscriptionsFromSms({ daysBack: 30 });
+        const candidates = await scrapeBillsAndSubscriptionsFromSms({ daysBack: 180 });
         if (candidates.length === 0) return;
 
         const processedList = await readJsonFile(PROCESSED_SMS_STORAGE_FILE, []);
