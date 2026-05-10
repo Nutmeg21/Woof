@@ -3,19 +3,26 @@
   "version": "0.0.1",
   "private": true,
   "scripts": {
-    "start": "node node_modules/react-native/local-cli/cli.js start"
+    "start": "node node_modules/react-native/local-cli/cli.js start",
+    "android": "expo run:android",
+    "ios": "expo run:ios"
   },
   "dependencies": {
     "@notifee/react-native": "^9.1.8",
     "expo": "~52.0.0",
+    "expo-asset": "~11.0.5",
+    "expo-audio": "~0.3.5",
     "expo-av": "~15.0.2",
     "expo-build-properties": "~0.13.3",
+    "expo-contacts": "~14.0.5",
     "expo-dev-client": "~5.0.20",
     "expo-file-system": "~18.0.12",
     "expo-location": "~18.0.10",
     "expo-notifications": "~0.29.14",
     "expo-speech": "~13.0.1",
+    "expo-task-manager": "~12.0.6",
     "react": "18.3.1",
-    "react-native": "0.76.9"
+    "react-native": "0.76.9",
+    "react-native-get-sms-android": "^2.1.0"
   }
 }

@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
-  StyleSheet, Text, View, TouchableOpacity, Alert, Animated, Vibration, Platform,
-  Modal, Pressable, SafeAreaView, ScrollView, StatusBar, Switch, Linking, TextInput, FlatList
+  StyleSheet, Text, View, TouchableOpacity, Alert, SafeAreaView, ScrollView, StatusBar, Switch, Linking, Animated, Vibration, Pressable, Modal
 } from 'react-native';
 import { Audio } from 'expo-av';
 import * as FileSystem from 'expo-file-system';
@@ -10,27 +9,17 @@ import * as Location from 'expo-location';
 import * as Speech from 'expo-speech';
 import * as TaskManager from 'expo-task-manager';
 import * as Contacts from 'expo-contacts';
+import BudgetScreen from './BudgetScreen';
 
-// Configuration
-const SERVER_URL = 'ws://0.0.0.0:8000/ws/audio'; 
+// ⚠️ UPDATE THIS WITH YOUR CURRENT LAPTOP IP ⚠️
+const SERVER_URL = 'ws://10.171.71.71:8081/ws/audio'; 
 const LOCATION_TASK_NAME = 'background-location-task';
 
-// Mock Data
-const MOCK_CALL_HISTORY = [
-  { id: 1, number: "0123 456 7899", type: "Warning", status: "Blocked by Woof!", time: "1 min ago" },
-  { id: 2, number: "+60 19 123 4567", type: "Safe", status: "Jane Doe", time: "2 hrs ago" },
-  { id: 3, number: "Unknown", type: "Spam", status: "Marked as Spam", time: "Yesterday" },
-];
-
+// Mock News Data
 const MALAYSIA_NEWS = [
   { id: 1, title: "Macau Scam losses hit RM100m", source: "The Star", url: "https://www.thestar.com.my" },
   { id: 2, title: "Never share your OTP/TAC", source: "BNM Alert", url: "https://www.bnm.gov.my" },
   { id: 3, title: "Fake Touch 'n Go SMS", source: "TechNave", url: "https://technave.com" },
-];
-
-const MOCK_NOTIFICATIONS = [
-  { id: 1, type: "Alert", content: "Suspicious call blocked.", time: "1:17 PM", color: "#ef4444" },
-  { id: 2, type: "Info", content: "Database updated.", time: "10:00 AM", color: "#10b981" },
 ];
 
 TaskManager.defineTask(LOCATION_TASK_NAME, ({ data, error }) => { if (error) return; });
@@ -42,36 +31,31 @@ Notifications.setNotificationHandler({
 export default function App() {
   const [screen, setScreen] = useState("home"); 
   const [settings, setSettings] = useState({ scamDetectionEnabled: false, darkMode: false });
-  
+  const [contacts, setContacts] = useState([]);
+
+  // --- AUDIO SCANNER STATES ---
+  const [scamStatus, setScamStatus] = useState({ status: 'IDLE', message: 'Ready to protect', color: '#10b981' });
   const [modalVisible, setModalVisible] = useState(false);
   const [modalMessage, setModalMessage] = useState("");
   const [modalActions, setModalActions] = useState([]);
   const [indicatorVisible, setIndicatorVisible] = useState(false);
   const [lastConfidence, setLastConfidence] = useState(null);
-  
-  const [scamStatus, setScamStatus] = useState({ status: 'IDLE', message: 'Ready to protect', color: '#10b981' });
-  const [contacts, setContacts] = useState([]);
-  const [smsText, setSmsText] = useState("");
-  
+
   const socketRef = useRef(null);
   const pulse = useRef(new Animated.Value(1)).current;
   const isMonitoringRef = useRef(false);
   const recordingRef = useRef(null);
   const hasAlertedRef = useRef(false);
 
-useEffect(() => {
+  useEffect(() => {
     (async () => {
-      // Request Audio & Notifications
+      // Request permissions for Audio Scanner and Contacts
       await Audio.requestPermissionsAsync();
       await Notifications.requestPermissionsAsync();
-      
-      // Request Background Location
       await Location.requestForegroundPermissionsAsync();
       await Location.requestBackgroundPermissionsAsync();
-      
-      // Request Contacts
+
       const { status } = await Contacts.requestPermissionsAsync();
-      
       if (status === 'granted') {
         const { data } = await Contacts.getContactsAsync({
           fields: [Contacts.Fields.PhoneNumbers],
@@ -80,14 +64,11 @@ useEffect(() => {
           setContacts(data.slice(0, 20)); 
         }
       } else {
-        // Alert if permission was denied previously
-        Alert.alert(
-            "Permission Required", 
-            "Please go to Settings > Apps > ScamGuard and enable Contacts to use the Call feature."
-        );
+        Alert.alert("Permission Required", "Please enable Contacts for the Finance feature.");
       }
     })();
 
+    // Start pulsing animation for the alert badge
     Animated.loop(
       Animated.sequence([
         Animated.timing(pulse, { toValue: 1.1, duration: 750, useNativeDriver: true }),
@@ -105,20 +86,7 @@ useEffect(() => {
   const callNumber = (phoneNumber) => Linking.openURL(`tel:${phoneNumber}`);
   const openNews = (url) => Linking.openURL(url);
 
-  const analyzeText = () => {
-    if (!socketRef.current || socketRef.current.readyState !== WebSocket.OPEN) {
-        const ws = new WebSocket(SERVER_URL);
-        ws.onopen = () => ws.send(JSON.stringify({ type: "text_message", data: smsText }));
-        ws.onmessage = (event) => {
-            const data = JSON.parse(event.data);
-            Alert.alert(data.status, data.message);
-            ws.close();
-        };
-    } else {
-        socketRef.current.send(JSON.stringify({ type: "text_message", data: smsText }));
-    }
-  };
-
+  // --- AUDIO SCANNER LOGIC ---
   const triggerScamAlert = async (data) => {
     if (hasAlertedRef.current) return; 
     hasAlertedRef.current = true;
@@ -138,7 +106,6 @@ useEffect(() => {
     Speech.speak("Warning. Scam detected.");
   };
 
-  // Audio Loop
   const cleanupRecording = async () => {
     if (recordingRef.current) {
         try {
@@ -199,7 +166,7 @@ useEffect(() => {
       await stopMonitoring(false);
       isMonitoringRef.current = true;
       setSettings(s => ({ ...s, scamDetectionEnabled: true }));
-      setScamStatus({ status: 'CONNECTING', message: 'Connecting...', color: '#007AFF' });
+      setScamStatus({ status: 'CONNECTING', message: 'Connecting to AI Guard...', color: '#007AFF' });
 
       await Audio.setAudioModeAsync({
         allowsRecordingIOS: true, playsInSilentModeIOS: true, staysActiveInBackground: true,
@@ -208,14 +175,14 @@ useEffect(() => {
 
       await Location.startLocationUpdatesAsync(LOCATION_TASK_NAME, {
         accuracy: Location.Accuracy.BestForNavigation, timeInterval: 2000, distanceInterval: 1,
-        foregroundService: { notificationTitle: "Woof! Active", notificationBody: "Listening...", notificationColor: "#FF9301" },
+        foregroundService: { notificationTitle: "Woof! Guard Active", notificationBody: "Monitoring call audio...", notificationColor: "#FF9301" },
       });
 
       const ws = new WebSocket(SERVER_URL);
       socketRef.current = ws;
       
       ws.onopen = () => {
-        setScamStatus({ status: 'SAFE', message: 'Protected.', color: '#10b981' });
+        setScamStatus({ status: 'SAFE', message: 'Call Audio Protected.', color: '#10b981' });
         runRecordingLoop();
       };
 
@@ -240,7 +207,7 @@ useEffect(() => {
     hasAlertedRef.current = false;
     if (updateUI) {
         setSettings(s => ({ ...s, scamDetectionEnabled: false }));
-        setScamStatus({ status: 'IDLE', message: 'Ready to protect', color: '#6b7280' });
+        setScamStatus({ status: 'IDLE', message: 'Call scanning disabled', color: '#6b7280' });
         setIndicatorVisible(false);
     }
     await cleanupRecording();
@@ -253,11 +220,30 @@ useEffect(() => {
       if (settings.scamDetectionEnabled) stopMonitoring(); else startMonitoring();
   };
 
+  // --- E-WALLET COMPONENTS ---
+  const WalletAction = ({ icon, label }) => (
+    <TouchableOpacity style={{ alignItems: 'center', gap: 6 }}>
+      <View style={styles.actionIconBg}>
+        <Text style={{ fontSize: 20 }}>{icon}</Text>
+      </View>
+      <Text style={{ color: '#fff', fontWeight: '700', fontSize: 13 }}>{label}</Text>
+    </TouchableOpacity>
+  );
+
+  const ServiceIcon = ({ icon, label }) => (
+    <TouchableOpacity style={{ width: '25%', alignItems: 'center', marginBottom: 16, gap: 8 }}>
+      <View style={[styles.serviceIconBg, { backgroundColor: inputBg }]}>
+        <Text style={{ fontSize: 24 }}>{icon}</Text>
+      </View>
+      <Text style={{ color: textColor, fontSize: 12, fontWeight: '600' }}>{label}</Text>
+    </TouchableOpacity>
+  );
+
   function SafetyStatusCard() {
     return (
-      <View style={[styles.card, { borderColor: scamStatus.color, borderWidth: 2, backgroundColor: cardBg }]}>
+      <View style={[styles.card, { borderColor: scamStatus.color, borderWidth: 2, backgroundColor: cardBg, marginBottom: 16 }]}>
         <View style={{flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center'}}>
-            <Text style={[styles.cardTitle, { color: textColor }]}>Protection Status</Text>
+            <Text style={[styles.cardTitle, { color: textColor }]}>🛡️ Live Call Guard</Text>
             <Switch value={settings.scamDetectionEnabled} onValueChange={toggleProtection} trackColor={{ false: "#767577", true: "#FE9301" }} />
         </View>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
@@ -273,37 +259,48 @@ useEffect(() => {
     );
   }
 
-  function CallHistoryList() {
-    return (
-      <View>
-        <Text style={[styles.sectionTitle, { color: textColor }]}>Recent Activity</Text>
-        <View style={[styles.card, { backgroundColor: cardBg }]}>
-          <ScrollView style={{ maxHeight: 200 }}>
-            {MOCK_CALL_HISTORY.map((call) => (
-                <View key={call.id} style={styles.callRow}>
-                  <View style={[styles.callIcon, call.type === 'Warning' ? styles.iconWarning : call.type === 'Spam' ? {backgroundColor:'#ef4444'} : styles.iconSafe]}>
-                    <Text style={{ color: "#fff", fontWeight: "700" }}>{call.type === 'Safe' ? "✓" : "!"}</Text>
-                  </View>
-                  <View style={{ flex: 1, marginLeft: 10 }}>
-                    <Text style={{fontWeight:'700', color: textColor}}>{call.number}</Text>
-                    <Text style={[styles.smallText, { color: subTextColor }]}>{call.status}</Text>
-                  </View>
-                  <Text style={[styles.smallText, { color: subTextColor }]}>{call.time}</Text>
-                </View>
-            ))}
-          </ScrollView>
-        </View>
-      </View>
-    );
-  }
-
+  // --- PURE E-WALLET HOME SCREEN ---
   function HomeScreen() {
     return (
       <ScrollView contentContainerStyle={{ padding: 16, gap: 16 }}>
-        <SafetyStatusCard />
-        <CallHistoryList />
+        
+        {/* 1. E-Wallet Balance Card */}
+        <View style={[styles.walletCard, { backgroundColor: '#FE9301' }]}>
+          <Text style={styles.walletLabel}>Available Balance</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+            <Text style={styles.walletBalance}>RM 3,450.50</Text>
+            <TouchableOpacity style={styles.historyBtn}>
+              <Text style={styles.historyBtnText}>History {'>'}</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Quick Actions */}
+          <View style={styles.walletActions}>
+            <WalletAction icon="➕" label="Top Up" />
+            <WalletAction icon="💸" label="Transfer" />
+            <WalletAction icon="📷" label="Scan QR" />
+            <WalletAction icon="📥" label="Receive" />
+          </View>
+        </View>
+
+        {/* 2. Services Grid */}
+        <View style={[styles.card, { backgroundColor: cardBg, paddingVertical: 20 }]}>
+          <Text style={[styles.sectionTitle, { color: textColor, marginBottom: 16, marginLeft: 8 }]}>Quick Services</Text>
+          <View style={styles.servicesGrid}>
+            <ServiceIcon icon="💡" label="Utilities" />
+            <ServiceIcon icon="📱" label="Prepaid" />
+            <ServiceIcon icon="🍿" label="Movies" />
+            <ServiceIcon icon="✈️" label="Travel" />
+            <ServiceIcon icon="🏥" label="Insurance" />
+            <ServiceIcon icon="🛒" label="Groceries" />
+            <ServiceIcon icon="🎁" label="Rewards" />
+            <ServiceIcon icon="⚙️" label="More" />
+          </View>
+        </View>
+
+        {/* 3. Scam News / Alerts Banner */}
         <View>
-            <Text style={[styles.sectionTitle, { color: textColor }]}>Scam News (Malaysia)</Text>
+            <Text style={[styles.sectionTitle, { color: textColor }]}>Security Alerts</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginLeft: -5 }}>
                 {MALAYSIA_NEWS.map((news) => (
                     <TouchableOpacity key={news.id} onPress={() => openNews(news.url)} style={[styles.newsCard, { backgroundColor: cardBg }]}>
@@ -313,69 +310,35 @@ useEffect(() => {
                 ))}
             </ScrollView>
         </View>
+
       </ScrollView>
     );
   }
 
-  function CallScreen() {
+  // --- FINANCE (CALL) SCREEN ---
+  function FinanceScreen() {
     return (
-      <ScrollView contentContainerStyle={{ padding: 16, gap: 16 }}>
-        <Text style={[styles.hugeTitle, { color: textColor }]}>Contacts</Text>
-        {contacts.length === 0 ? <Text style={{color: subTextColor}}>Loading contacts...</Text> : contacts.map((c, i) => (
-            c.phoneNumbers && (
-                <View key={i} style={[styles.contactRowCard, { backgroundColor: cardBg }]}>
-                    <View>
-                        <Text style={{ fontWeight: "700", fontSize: 16, color: textColor }}>{c.name}</Text>
-                        <Text style={[styles.smallText, { color: subTextColor }]}>{c.phoneNumbers[0].number}</Text>
-                    </View>
-                    <TouchableOpacity onPress={() => callNumber(c.phoneNumbers[0].number)} style={[styles.bigButton]}>
-                        <Text style={{ color: "#fff", fontWeight: "700" }}>Call</Text>
-                    </TouchableOpacity>
-                </View>
-            )
-        ))}
-      </ScrollView>
-    );
-  }
+      <ScrollView contentContainerStyle={{ padding: 16 }}>
+        
+        {/* THE AUDIO DETECTION BUTTON INTEGRATED HERE */}
+        <SafetyStatusCard />
 
-  function MessageScreen() {
-    return (
-      <ScrollView contentContainerStyle={{ padding: 16, gap: 16 }}>
-        <Text style={[styles.hugeTitle, { color: textColor }]}>SMS Scanner</Text>
-        <View style={[styles.card, { backgroundColor: cardBg }]}>
-           <TextInput 
-                style={[styles.inputBox, { backgroundColor: inputBg, color: textColor }]} 
-                placeholderTextColor={subTextColor}
-                multiline 
-                placeholder="Paste suspicious SMS here..." 
-                value={smsText} 
-                onChangeText={setSmsText} 
-           />
-           <TouchableOpacity onPress={analyzeText} style={[styles.bigButton, {marginTop: 10}]}>
-              <Text style={{ color: "#fff", fontWeight: "700" }}>Analyze Text</Text>
-           </TouchableOpacity>
+        <Text style={[styles.hugeTitle, { color: textColor, marginTop: 8 }]}>Finance Contacts</Text>
+        <View style={{ gap: 16 }}>
+          {contacts.length === 0 ? <Text style={{color: subTextColor}}>Loading contacts...</Text> : contacts.map((c, i) => (
+              c.phoneNumbers && (
+                  <View key={i} style={[styles.contactRowCard, { backgroundColor: cardBg }]}>
+                      <View>
+                          <Text style={{ fontWeight: "700", fontSize: 16, color: textColor }}>{c.name}</Text>
+                          <Text style={[styles.smallText, { color: subTextColor }]}>{c.phoneNumbers[0].number}</Text>
+                      </View>
+                      <TouchableOpacity onPress={() => callNumber(c.phoneNumbers[0].number)} style={[styles.bigButton]}>
+                          <Text style={{ color: "#fff", fontWeight: "700" }}>Contact</Text>
+                      </TouchableOpacity>
+                  </View>
+              )
+          ))}
         </View>
-        <Text style={[styles.sectionTitle, { color: textColor }]}>Recent Messages</Text>
-        <View style={[styles.card, { backgroundColor: cardBg }]}>
-            <View style={styles.callRow}>
-                <View style={{flex:1}}><Text style={{fontWeight:'700', color: textColor}}>Unknown: You won RM5000!</Text></View>
-                <TouchableOpacity onPress={() => {setSmsText("You won RM5000!"); analyzeText();}}><Text style={{color:'#FE9301'}}>Check</Text></TouchableOpacity>
-            </View>
-        </View>
-      </ScrollView>
-    );
-  }
-
-  function NotificationScreen() {
-    return (
-      <ScrollView contentContainerStyle={{ padding: 16, gap: 12 }}>
-        <Text style={[styles.hugeTitle, { color: textColor }]}>Notifications</Text>
-        {MOCK_NOTIFICATIONS.map((n) => (
-          <View key={n.id} style={[styles.card, { borderLeftWidth: 4, borderLeftColor: n.color, backgroundColor: cardBg }]}>
-            <Text style={{ fontWeight: "700", color: textColor }}>{n.type}: {n.content}</Text>
-            <Text style={[styles.smallText, { color: subTextColor }]}>{n.time}</Text>
-          </View>
-        ))}
       </ScrollView>
     );
   }
@@ -396,25 +359,23 @@ useEffect(() => {
     <SafeAreaView style={[styles.container, themeStyles.container]}>
       <StatusBar barStyle={settings.darkMode ? "light-content" : "dark-content"} />
       <View style={[styles.header, themeStyles.header]}>
-        <Text style={[styles.title, { color: "#FE9301", fontWeight: "800" }]}>Woof!</Text>
+        <Text style={[styles.title, { color: "#FE9301", fontWeight: "800" }]}>Walley</Text>
         <Text style={[styles.headerTime, { color: subTextColor }]}>Demo Mode</Text>
       </View>
       <View style={{ flex: 1 }}>
         {screen === "home" && <HomeScreen />}
-        {screen === "call" && <CallScreen />}
-        {screen === "message" && <MessageScreen />}
-        {screen === "notification" && <NotificationScreen />}
+        {screen === "finance" && <FinanceScreen />}
+        {screen === "budget" && <BudgetScreen darkMode={settings.darkMode} />}
         {screen === "settings" && <SettingsScreen />}
       </View>
       <View style={[styles.navBar, themeStyles.navBar]}>
-        <NavButton label="Call" active={screen === "call"} onPress={() => setScreen("call")} />
-        <NavButton label="Message" active={screen === "message"} onPress={() => setScreen("message")} />
         <NavButton label="Home" active={screen === "home"} onPress={() => setScreen("home")} />
-        <NavButton label="Notif" active={screen === "notification"} onPress={() => setScreen("notification")} />
+        <NavButton label="Finance" active={screen === "finance"} onPress={() => setScreen("finance")} />
+        <NavButton label="Budget" active={screen === "budget"} onPress={() => setScreen("budget")} />
         <NavButton label="Settings" active={screen === "settings"} onPress={() => setScreen("settings")} />
       </View>
-      
-      {/* ALERTS */}
+
+      {/* FLOATING AUDIO ALERTS (Restored) */}
       {indicatorVisible && (
         <Animated.View style={[styles.floatingIndicator, { transform: [{ scale: pulse }] }]}>
           <Pressable onPress={() => { setModalVisible(true); }}>
@@ -444,6 +405,7 @@ useEffect(() => {
           </View>
         </View>
       </Modal>
+
     </SafeAreaView>
   );
 }
@@ -464,30 +426,36 @@ const styles = StyleSheet.create({
   headerTime: { color: "#6b7280" },
   navBar: { height: 64, flexDirection: "row", borderTopWidth: 1, borderTopColor: "#e5e7eb", backgroundColor: "#fff" },
   card: { backgroundColor: "#fff", padding: 12, borderRadius: 12, shadowColor: "#000", shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 },
-  cardWarning: { borderWidth: 2, borderColor: "#FE9301", backgroundColor: "#FFF3E0" },
-  cardSafe: { borderWidth: 2, borderColor: "#10b981", backgroundColor: "#ECFDF5" },
-  cardIdle: { borderWidth: 1, borderColor: "#ddd", backgroundColor: "#f9f9f9" },
-  cardTitle: { fontSize: 16, fontWeight: "800", marginBottom: 8 },
-  iconCircle: { width: 48, height: 48, borderRadius: 24, alignItems: "center", justifyContent: "center" },
-  iconWarning: { backgroundColor: "#FE9301" }, iconSafe: { backgroundColor: "#10b981" },
-  statusText: { fontSize: 20, fontWeight: "900" },
-  smallText: { color: "#6b7280", fontSize: 12 },
   sectionTitle: { fontSize: 18, fontWeight: "900", marginBottom: 8 },
   contactRowCard: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", backgroundColor: '#fff', padding: 15, marginBottom: 10, borderRadius: 12, elevation: 1 },
   bigButton: { backgroundColor: "#FE9301", paddingVertical: 10, paddingHorizontal: 14, borderRadius: 12, alignItems: "center", justifyContent: "center" },
   hugeTitle: { fontSize: 24, fontWeight: "800", marginBottom: 12 },
+  cardRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", backgroundColor: "#fff", padding: 12, borderRadius: 10, shadowColor: "#000", shadowOpacity: 0.04, elevation: 2 },
+  newsCard: { backgroundColor: '#fff', width: 250, padding: 15, marginRight: 15, borderRadius: 12, elevation: 2, borderLeftWidth: 5, borderLeftColor: '#FE9301' },
+  newsTitle: { fontWeight: '700', fontSize: 16, marginBottom: 5 },
+  newsSource: { color: '#FE9301', fontSize: 12, fontWeight: '600' },
+  smallText: { color: "#6b7280", fontSize: 12 },
+  
+  // Audio Scanner UI Styles Restored
+  cardTitle: { fontSize: 16, fontWeight: "800", marginBottom: 8 },
+  iconCircle: { width: 48, height: 48, borderRadius: 24, alignItems: "center", justifyContent: "center" },
+  statusText: { fontSize: 20, fontWeight: "900" },
   floatingIndicator: { position: "absolute", right: 20, bottom: 90, zIndex: 60 },
   floatingInner: { width: 64, height: 64, borderRadius: 32, alignItems: "center", justifyContent: "center", backgroundColor: "#ef4444", shadowColor: "#000", shadowOpacity: 0.2, elevation: 6 },
   badge: { position: "absolute", top: -6, right: -6, width: 22, height: 22, borderRadius: 11, backgroundColor: "#FFCD02", alignItems: "center", justifyContent: "center", borderWidth: 2, borderColor: "#ef4444", zIndex: 2 },
   modalBackdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", alignItems: "center", justifyContent: "center", padding: 20 },
   modalCard: { width: "100%", maxWidth: 420, backgroundColor: "#fff", padding: 18, borderRadius: 14, borderTopWidth: 6 },
-  cardRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", backgroundColor: "#fff", padding: 12, borderRadius: 10, shadowColor: "#000", shadowOpacity: 0.04, elevation: 2 },
-  newsCard: { backgroundColor: '#fff', width: 250, padding: 15, marginRight: 15, borderRadius: 12, elevation: 2, borderLeftWidth: 5, borderLeftColor: '#FE9301' },
-  newsTitle: { fontWeight: '700', fontSize: 16, marginBottom: 5 },
-  newsSource: { color: '#FE9301', fontSize: 12, fontWeight: '600' },
-  inputBox: { height: 100, borderColor: '#e5e7eb', borderWidth: 1, borderRadius: 10, padding: 10, textAlignVertical: 'top', backgroundColor: '#f9fafb' },
-  callRow: { flexDirection: "row", alignItems: "center", paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: "#f3f4f6" },
-  callIcon: { width: 40, height: 40, borderRadius: 10, alignItems: "center", justifyContent: "center" },
+
+  // E-Wallet Specific Styles
+  walletCard: { padding: 20, borderRadius: 16, elevation: 6, shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 10, shadowOffset: { width: 0, height: 4 } },
+  walletLabel: { color: 'rgba(255,255,255,0.85)', fontSize: 14, fontWeight: '600', marginBottom: 4 },
+  walletBalance: { color: '#fff', fontSize: 32, fontWeight: '900', letterSpacing: 0.5 },
+  historyBtn: { backgroundColor: 'rgba(255,255,255,0.25)', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12 },
+  historyBtnText: { color: '#fff', fontWeight: '800', fontSize: 12 },
+  walletActions: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 24, paddingHorizontal: 10 },
+  actionIconBg: { width: 48, height: 48, backgroundColor: 'rgba(255,255,255,0.25)', borderRadius: 24, alignItems: 'center', justifyContent: 'center' },
+  servicesGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-start' },
+  serviceIconBg: { width: 52, height: 52, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
 });
 
 const lightTheme = StyleSheet.create({ container: { backgroundColor: "#f0f4f8" }, header: { backgroundColor: "#fff" }, navBar: { backgroundColor: "#fff" } });
